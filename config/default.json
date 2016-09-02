@@ -1,0 +1,17 @@
+{
+  "api": {
+    "secret": "secret!",
+    "steam_apikey": "steam_api_key",
+    "mongodb": "localhost:27017",
+    "mongodb_port": 27017,
+    "mongodb_password": null,
+    "mongodb_user": null
+  },
+
+  "steam-price-bot": {
+    "api_host": "127.0.0.1",
+    "api_port": 80,
+    "secret": "secret!",
+    "steam_apikey": "steam_api_key"
+  }
+}

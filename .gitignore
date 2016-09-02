@@ -1,0 +1,11 @@
+*.pyc
+*.log
+*.zip
+*.rar
+codeline_counter.py
+
+.idea/
+build/
+files/
+
+config/prod.json
