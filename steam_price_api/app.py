@@ -1,5 +1,5 @@
 import datetime
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, render_template, redirect
 from flask.ext.pymongo import PyMongo
 from . import API_SECRET, MONGODB_HOST
 
@@ -9,7 +9,7 @@ app = Flask(__name__)
 app.config['MONGO_DBNAME'] = 'prices'
 app.config['MONGO_HOST'] = MONGODB_HOST
 app.config['MONGO_CONNECT'] = False
-# app.debug = True
+app.debug = True
 mongo = PyMongo(app)
 
 
@@ -41,6 +41,78 @@ def index():
         "data": data,
         "success": success
     })
+
+
+@app.route('/price/', methods=["get"])
+def price_edit():
+    data = {}
+
+    items = mongo.db.items.find({'last_updated': {"$ne": None}, 'manual': {"$ne": True}}, {
+        "market_hash_name": 1,
+        "average_price": 1,
+        "lowest_price": 1,
+        "sold_last_week": 1,
+        "last_updated": 1,
+        "manual": 1
+    }).sort("average_price", -1)
+
+    data["items"] = list(items)
+    for item in data["items"]:
+        if item.get("_id", False):
+            item.pop("_id", None)
+
+    manual_items = mongo.db.items.find({'manual': True}, {
+        "market_hash_name": 1,
+        "average_price": 1,
+        "lowest_price": 1,
+        "sold_last_week": 1,
+        "last_updated": 1,
+        "manual": 1
+    }).sort("average_price", -1)
+
+    data["manual_items"] = list(manual_items)
+    for item in data["manual_items"]:
+        if item.get("_id", False):
+            item.pop("_id", None)
+
+    data["count"] = len(data["items"])
+
+    return render_template('index.jinja2', data=data, key=api_secret)
+
+
+@app.route('/price/', methods=["POST"])
+def price_edit_post():
+    id = request.form.get('id')
+
+    if id:
+        item = mongo.db.items.find_one({"market_hash_name": id})
+        if item:
+            price = request.form.get('price')
+            remove = request.form.get('remove')
+            update = request.form.get('update', False)
+            if price:
+                if not update:
+                    mongo.db.items.update({"_id": item.get('_id')}, {"$set": {
+                        "last_updated": datetime.datetime.now(),
+                        "manual": True,
+                        "average_price": float(price)
+                    }})
+                else:
+                    avg_price = (float(item.get("average_price", float(price))) + float(price)) / 2
+                    avg_price = round(avg_price, 2)
+                    mongo.db.items.update({"_id": item.get('_id')}, {"$set": {
+                        "last_updated": datetime.datetime.now(),
+                        "average_price": avg_price
+                    }})
+
+            elif remove:
+                mongo.db.items.update({"_id": item.get('_id')}, {"$set": {
+                    "last_updated": datetime.datetime.now(),
+                    "average_price": -1
+                }, "$unset": {
+                    "manual": ""
+                }})
+    return redirect('/price/?key=' + api_secret)
 
 
 @app.route('/price/available', methods=["get"])
@@ -142,7 +214,14 @@ def price_default():
     data = {}
     success = True
 
-    item = list(mongo.db.items.find().sort("last_updated", 1).limit(1))
+    week_above = datetime.datetime.now() + datetime.timedelta(weeks=1)
+
+    item = list(mongo.db.items.find({
+        "last_updated": {
+            "$lte": week_above
+        },
+        "manual": {"$ne": True}
+    }).sort("last_updated", 1).limit(1))
     if len(item) <= 0:
         success = False
     else:
@@ -247,8 +326,8 @@ def price_upsert():
 
             if lowest_price > 0:
                 db_item = mongo.db.items.find_one({"market_hash_name": market_hash_name, "appid": int(appid)})
-                if db_item and "lowest_price" in db_item:
-                    avg_price = (float(db_item["lowest_price"]) + avg_price) / 2
+                if db_item and "average_price" in db_item:
+                    avg_price = (float(db_item["average_price"]) + avg_price) / 2
                 avg_price = round(avg_price, 2)
 
         result = mongo.db.items.update({"market_hash_name": market_hash_name, "appid": int(appid)}, {

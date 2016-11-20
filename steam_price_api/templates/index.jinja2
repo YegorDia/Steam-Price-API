@@ -1,0 +1,124 @@
+<html>
+<head>
+    <title>Edit price DB</title>
+
+    <style>
+        table {
+            display: table;
+            border-collapse: separate;
+            border-spacing: 5px;
+            border: 1px solid grey;
+        }
+
+        table tbody td {
+            border: 1px solid black;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Manually edited Items</h2>
+    <table>
+        <tbody>
+            <tr>
+                <th>market_hash_name</th>
+                <th>average_price</th>
+                <th>sold_last_week</th>
+                <th>set by user</th>
+                <th>last_updated</th>
+                <th>functions</th>
+            </tr>
+
+            {% for item in data['manual_items'] %}
+                <tr>
+                    <td>{{ item.market_hash_name }}</td>
+                    <td>{{ item.average_price or 'No data' }}</td>
+                    <td>{{ item.sold_last_week or 'No data' }}</td>
+                    <td>{% if item.manual == True %} <h3>YES</h3> {% else %} no {% endif %}</td>
+                    <td>{{ item.last_updated or 'Not updated yet' }}</td>
+                    <td>
+                        {% if item.average_price == -1 %}
+                            Change price to
+                            <form action="/price/" method="POST">
+                                <input type="text" id="price" name="price" value="{{ item.average_price }}">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="submit">
+                            </form>
+                        {% elif item.manual == True %}
+                            Change item to automatic update
+                            <form action="/price/" method="POST">
+                                <input type="hidden" id="remove" name="remove" value="True">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="Remove user-set price">
+                            </form>
+                        {% else %}
+                            Update the price
+                            <form action="/price/" method="POST">
+                                <input type="text" id="price" name="price" value="{{ item.average_price }}">
+                                <input type="hidden" id="update" name="update" value="True">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="Update with price">
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Available Items</h2>
+    <table>
+        <tbody>
+            <tr>
+                <th>market_hash_name</th>
+                <th>average_price</th>
+                <th>sold_last_week</th>
+                <th>set by user</th>
+                <th>last_updated</th>
+                <th>functions</th>
+            </tr>
+
+            {% for item in data['items'] %}
+                <tr>
+                    <td>{{ item.market_hash_name }}</td>
+                    <td>{{ item.average_price or 'No data' }}</td>
+                    <td>{{ item.sold_last_week or 'No data' }}</td>
+                    <td>{% if item.manual == True %} <h3>YES</h3> {% else %} no {% endif %}</td>
+                    <td>{{ item.last_updated or 'Not updated yet' }}</td>
+                    <td>
+                        {% if item.average_price == -1 %}
+                            Change price to
+                            <form action="/price/" method="POST">
+                                <input type="text" id="price" name="price" value="{{ item.average_price }}">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="submit">
+                            </form>
+                        {% elif item.manual == True %}
+                            Change item to automatic update
+                            <form action="/price/" method="POST">
+                                <input type="hidden" id="remove" name="remove" value="True">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="Remove user-set price">
+                            </form>
+                        {% else %}
+                            Update the price
+                            <form action="/price/" method="POST">
+                                <input type="text" id="price" name="price" value="{{ item.average_price }}">
+                                <input type="hidden" id="update" name="update" value="True">
+                                <input type="hidden" id="id" name="id" value="{{ item.market_hash_name }}">
+                                <input type="hidden" id="key" name="key" value="{{ key }}">
+                                <input type="submit" value="Update with price">
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

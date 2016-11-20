@@ -234,7 +234,7 @@ class SteamPriceBot(object):
 
                     counted = 0
                     for i in range(len(graph_data) - to_count, len(graph_data)):
-                        if float(graph_data[i][1]) <= (avg_price * 1.3):
+                        if float(graph_data[i][1]) <= (avg_price * 1.1):
                             price += float(graph_data[i][1])
                             counted += 1
                     price /= float(counted)
