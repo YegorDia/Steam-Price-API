@@ -14,6 +14,9 @@ from requests.exceptions import ConnectTimeout
 
 ITEMS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'csgo_files/items_game.txt')
 LANG_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'csgo_files/csgo_english.txt')
+KEY_PRICE = 2.00
+
+from BeautifulSoup import BeautifulSoup
 
 
 def dict_to_query(d):
@@ -101,81 +104,162 @@ class SteamPriceBot(object):
     def test_connection(self):
         return self.request_api().get("success", False)
 
-    def get_item_price(self, appid, market_hash_name):
-        time.sleep(6.5)
-        url = 'http://steamcommunity.com/market/priceoverview/?key=%s&currency=1&l=en&appid=%s&market_hash_name=%s' % (
-            STEAM_API_KEY, appid, market_hash_name)
-        price = self._session.get(url)
-
-        used_proxies = []
-        while price.status_code == 429:
-            if len(self.proxies) == 0:
-                self.refresh_proxies()
-
-            if len(used_proxies) >= len(self.proxies):
-                used_proxies = []
-                self.proxies = []
-                time.sleep(10)
-                self.refresh_proxies()
-                continue
-
-            current_proxy = self.last_proxy if self.last_proxy and self.last_proxy not in used_proxies else choice(
-                self.proxies)
-            if current_proxy not in used_proxies:
-                proxy_dict = {
-                    "http": "http://%s" % current_proxy,
-                    # "https": "https://%s" % current_proxy,
-                }
-                try:
-                    price = self._session.get(url, proxies=proxy_dict, timeout=7)
-                    if price.status_code == 500 or price.status_code == 200:
-                        self.last_proxy = current_proxy
-                        time.sleep(2.5)
-                    elif price.status_code == 429:
-                        used_proxies.append(current_proxy)
-                except:
-                    if price.status_code != 200:
-                        self.last_proxy = None
-                        time.sleep(1)
-                    else:
-                        self.last_proxy = current_proxy
-                        time.sleep(2.5)
-
-        if price.status_code == 400 or price.status_code == 500:
-            self.clean_queue_item(market_hash_name, appid)
+    def get_item_price_steam_analyst(self, appid, market_hash_name):
+        if not appid == 730:
             return False
 
-        price_data = {}
-        try:
-            price_data = json.loads(price.content.encode('utf-8'))
-        except ValueError:
+        url = 'https://csgo.steamanalyst.com/query.php?&q=%s' % market_hash_name
+        price = requests.get(url)
+        if not price.status_code == 200:
             return False
 
-        if price_data.get("success", False):
-            lowest_price = price_data.get('lowest_price', '&#36;-1')
-            median_price = price_data.get('median_price', lowest_price)
-            if lowest_price == '&#36;-1' and median_price != '&#36;-1':
-                lowest_price = median_price
+        # Response should be like
+
+        # <div class="col-xs-12 col-sm-12 col-md-4 col-lg-3 col-xl-15 grid-item item-noscroll">
+        #     <div class="card">
+        #         <div class="title"><a href="/model/AWP">AWP</a> | <a href="/name/Dragon Lore">Dragon Lore</a></div>
+        #         <div class="row" style="padding: 5px;">
+        #             <div class="special souvenir text-xs-right">
+        #                 <span class="tag tag-souvenir">Souvenir</span>
+        #             </div>
+        #             </div>
+        #             <div class="item-img">
+        #             <img alt="Souvenir AWP | Dragon Lore (Factory New)" src="https://steamcommunity-a.akamaihd.net/economy/image/fWFc82js0fmoRAP-qOIPu5THSWqfSmTELLqcUywGkijVjZYMUrsm1j-9xgEObwgfEh_nvjlWhNzZCveCDfIBj98xqodQ2CZknz56I_OKMyJYfwHGCKVIXfkF8BrtDig818Z0ROi6_rwOPWOz5cCRZq5_YtseF8HWUqODb1z07B1sg6IIecSApS3n3y3va2xbCka_-mgCzrWHpPI11dsTLfPm/"/>
+        #             </div>
+        #             <div class="card-block">
+        #             <ul class="list-group">
+        #                 <li class="fn list-group-item"><a href="/id/109736063"><span class="exterior">Factory New</span><span class="price pull-right">5,000 - 6,000 Keys</span></a></li>
+        #             </ul>
+        #         </div>
+        #     </div>
+        # </div>
+
+        soup = BeautifulSoup(price.content)
+        price_dom = soup.findAll('span', {'class': 'price pull-right'})
+
+        if not price_dom or len(price_dom) == 0:
+            return False
+
+        price_text = None
+        found = False
+        for price in price_dom:
+            if found:
+                break
+
             try:
-                new_median_price = float(median_price.split('&#36;')[1])
-                new_lowest_price = float(lowest_price.split('&#36;')[1])
+                img_alt = price.parent.parent.parent.parent.parent.find('img').attrs[0][1]
             except:
-                try:
-                    new_median_price = float(median_price.split('$')[1])
-                    new_lowest_price = float(lowest_price.split('$')[1])
-                except:
-                    raise Exception('Convert error')
+                return False
 
-            sold_weekly = -1
+            if not found and market_hash_name == img_alt:
+                price_text = price.text
+                found = True
 
-            if new_lowest_price > 1:
-                graph_price = self.get_graph_price(market_hash_name, appid, new_lowest_price)
-                new_lowest_price = graph_price["price"]
-                new_median_price = new_lowest_price
-                sold_weekly = graph_price["sold_weekly"]
+        if not found:
+            return False
 
+        new_lowest_price = None
+        new_median_price = None
+        sold_weekly = -1
+
+        if price_text.startswith('$'):
+            try:
+                new_lowest_price = float(price_text.split(' ')[0][1:])
+                # print("Update %s by PRICE for %s" % (market_hash_name, new_lowest_price))
+            except:
+                return False
+        else:
+            try:
+                new_lowest_price = float(int(price_text.split(' ')[0]) * KEY_PRICE)
+                # print("Update %s by KEYS for %s" % (market_hash_name, new_lowest_price))
+            except:
+                return False
+
+        new_median_price = new_lowest_price
+
+        if new_lowest_price and new_median_price:
             return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
-                                          sold_weekly=sold_weekly).get("success", False)
+                                              sold_weekly=sold_weekly).get("success", False)
+
+        return False
+
+    def get_item_price(self, appid, market_hash_name):
+        time.sleep(10.0)
+
+        if not self.get_item_price_steam_analyst(appid, market_hash_name):
+            url = 'http://steamcommunity.com/market/priceoverview/?key=%s&currency=1&l=en&appid=%s&market_hash_name=%s' % (
+                STEAM_API_KEY, appid, market_hash_name)
+            price = self._session.get(url)
+
+            used_proxies = []
+            while price.status_code == 429:
+                if len(self.proxies) == 0:
+                    self.refresh_proxies()
+
+                if len(used_proxies) >= len(self.proxies):
+                    used_proxies = []
+                    self.proxies = []
+                    time.sleep(10)
+                    self.refresh_proxies()
+                    continue
+
+                current_proxy = self.last_proxy if self.last_proxy and self.last_proxy not in used_proxies else choice(
+                    self.proxies)
+                if current_proxy not in used_proxies:
+                    proxy_dict = {
+                        "http": "http://%s" % current_proxy,
+                        # "https": "https://%s" % current_proxy,
+                    }
+                    try:
+                        price = self._session.get(url, proxies=proxy_dict, timeout=7)
+                        if price.status_code == 500 or price.status_code == 200:
+                            self.last_proxy = current_proxy
+                            time.sleep(2.5)
+                        elif price.status_code == 429:
+                            used_proxies.append(current_proxy)
+                    except:
+                        if price.status_code != 200:
+                            self.last_proxy = None
+                            time.sleep(1)
+                        else:
+                            self.last_proxy = current_proxy
+                            time.sleep(2.5)
+
+            if price.status_code == 400 or price.status_code == 500:
+                self.clean_queue_item(market_hash_name, appid)
+                return False
+
+            price_data = {}
+            try:
+                price_data = json.loads(price.content.encode('utf-8'))
+            except ValueError:
+                return False
+
+            if price_data.get("success", False):
+                lowest_price = price_data.get('lowest_price', '&#36;-1')
+                median_price = price_data.get('median_price', lowest_price)
+                if lowest_price == '&#36;-1' and median_price != '&#36;-1':
+                    lowest_price = median_price
+                try:
+                    new_median_price = float(median_price.split('&#36;')[1])
+                    new_lowest_price = float(lowest_price.split('&#36;')[1])
+                except:
+                    try:
+                        new_median_price = float(median_price.split('$')[1])
+                        new_lowest_price = float(lowest_price.split('$')[1])
+                    except:
+                        raise Exception('Convert error')
+
+                sold_weekly = -1
+
+                if new_lowest_price > 1:
+                    graph_price = self.get_graph_price(market_hash_name, appid, new_lowest_price)
+                    new_lowest_price = graph_price["price"]
+                    new_median_price = new_lowest_price
+                    sold_weekly = graph_price["sold_weekly"]
+
+                return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+                                              sold_weekly=sold_weekly).get("success", False)
         return False
 
     def get_available(self):
