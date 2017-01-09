@@ -116,7 +116,7 @@ class SteamPriceBot(object):
         # Response should be like
 
         # <div class="col-xs-12 col-sm-12 col-md-4 col-lg-3 col-xl-15 grid-item item-noscroll">
-        #     <div class="card">
+        # <div class="card">
         #         <div class="title"><a href="/model/AWP">AWP</a> | <a href="/name/Dragon Lore">Dragon Lore</a></div>
         #         <div class="row" style="padding: 5px;">
         #             <div class="special souvenir text-xs-right">
@@ -178,52 +178,54 @@ class SteamPriceBot(object):
         new_median_price = new_lowest_price
 
         if new_lowest_price and new_median_price:
-            return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
-                                              sold_weekly=sold_weekly).get("success", False)
+            return new_median_price
+            # return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+            #                                   sold_weekly=sold_weekly).get("success", False)
 
         return False
 
     def get_item_price(self, appid, market_hash_name):
         time.sleep(10.0)
 
-        if not self.get_item_price_steam_analyst(appid, market_hash_name):
-            url = 'http://steamcommunity.com/market/priceoverview/?key=%s&currency=1&l=en&appid=%s&market_hash_name=%s' % (
-                STEAM_API_KEY, appid, market_hash_name)
-            price = self._session.get(url)
+        steam_analyst_price = self.get_item_price_steam_analyst(appid, market_hash_name)
 
-            used_proxies = []
-            while price.status_code == 429:
-                if len(self.proxies) == 0:
-                    self.refresh_proxies()
+        url = 'http://steamcommunity.com/market/priceoverview/?key=%s&currency=1&l=en&appid=%s&market_hash_name=%s' % (
+            STEAM_API_KEY, appid, market_hash_name)
+        price = self._session.get(url)
 
-                if len(used_proxies) >= len(self.proxies):
-                    used_proxies = []
-                    self.proxies = []
-                    time.sleep(10)
-                    self.refresh_proxies()
-                    continue
+        used_proxies = []
+        while price.status_code == 429:
+            if len(self.proxies) == 0:
+                self.refresh_proxies()
 
-                current_proxy = self.last_proxy if self.last_proxy and self.last_proxy not in used_proxies else choice(
-                    self.proxies)
-                if current_proxy not in used_proxies:
-                    proxy_dict = {
-                        "http": "http://%s" % current_proxy,
-                        # "https": "https://%s" % current_proxy,
-                    }
-                    try:
-                        price = self._session.get(url, proxies=proxy_dict, timeout=7)
-                        if price.status_code == 500 or price.status_code == 200:
-                            self.last_proxy = current_proxy
-                            time.sleep(2.5)
-                        elif price.status_code == 429:
-                            used_proxies.append(current_proxy)
-                    except:
-                        if price.status_code != 200:
-                            self.last_proxy = None
-                            time.sleep(1)
-                        else:
-                            self.last_proxy = current_proxy
-                            time.sleep(2.5)
+            if len(used_proxies) >= len(self.proxies):
+                used_proxies = []
+                self.proxies = []
+                time.sleep(10)
+                self.refresh_proxies()
+                continue
+
+            current_proxy = self.last_proxy if self.last_proxy and self.last_proxy not in used_proxies else choice(
+                self.proxies)
+            if current_proxy not in used_proxies:
+                proxy_dict = {
+                    "http": "http://%s" % current_proxy,
+                    # "https": "https://%s" % current_proxy,
+                }
+                try:
+                    price = self._session.get(url, proxies=proxy_dict, timeout=7)
+                    if price.status_code == 500 or price.status_code == 200:
+                        self.last_proxy = current_proxy
+                        time.sleep(2.5)
+                    elif price.status_code == 429:
+                        used_proxies.append(current_proxy)
+                except:
+                    if price.status_code != 200:
+                        self.last_proxy = None
+                        time.sleep(1)
+                    else:
+                        self.last_proxy = current_proxy
+                        time.sleep(2.5)
 
             if price.status_code == 400 or price.status_code == 500:
                 self.clean_queue_item(market_hash_name, appid)
@@ -258,8 +260,22 @@ class SteamPriceBot(object):
                     new_median_price = new_lowest_price
                     sold_weekly = graph_price["sold_weekly"]
 
+                if steam_analyst_price is not False:
+                    if steam_analyst_price < new_lowest_price:
+                        new_lowest_price = steam_analyst_price
+                        new_median_price = steam_analyst_price
+                        sold_weekly = -1
+
                 return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
                                               sold_weekly=sold_weekly).get("success", False)
+            else:
+                if steam_analyst_price is not False:
+                    new_lowest_price = steam_analyst_price
+                    new_median_price = steam_analyst_price
+                    sold_weekly = -1
+
+                    return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+                                                  sold_weekly=sold_weekly).get("success", False)
         return False
 
     def get_available(self):
