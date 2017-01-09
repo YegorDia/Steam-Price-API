@@ -108,84 +108,87 @@ class SteamPriceBot(object):
         if not appid == 730:
             return False
 
-        url = 'https://csgo.steamanalyst.com/query.php?&q=%s' % market_hash_name
-        price = requests.get(url)
-        if not price.status_code == 200:
-            return False
-
-        # Response should be like
-
-        # <div class="col-xs-12 col-sm-12 col-md-4 col-lg-3 col-xl-15 grid-item item-noscroll">
-        # <div class="card">
-        #         <div class="title"><a href="/model/AWP">AWP</a> | <a href="/name/Dragon Lore">Dragon Lore</a></div>
-        #         <div class="row" style="padding: 5px;">
-        #             <div class="special souvenir text-xs-right">
-        #                 <span class="tag tag-souvenir">Souvenir</span>
-        #             </div>
-        #             </div>
-        #             <div class="item-img">
-        #             <img alt="Souvenir AWP | Dragon Lore (Factory New)" src="https://steamcommunity-a.akamaihd.net/economy/image/fWFc82js0fmoRAP-qOIPu5THSWqfSmTELLqcUywGkijVjZYMUrsm1j-9xgEObwgfEh_nvjlWhNzZCveCDfIBj98xqodQ2CZknz56I_OKMyJYfwHGCKVIXfkF8BrtDig818Z0ROi6_rwOPWOz5cCRZq5_YtseF8HWUqODb1z07B1sg6IIecSApS3n3y3va2xbCka_-mgCzrWHpPI11dsTLfPm/"/>
-        #             </div>
-        #             <div class="card-block">
-        #             <ul class="list-group">
-        #                 <li class="fn list-group-item"><a href="/id/109736063"><span class="exterior">Factory New</span><span class="price pull-right">5,000 - 6,000 Keys</span></a></li>
-        #             </ul>
-        #         </div>
-        #     </div>
-        # </div>
-
-        soup = BeautifulSoup(price.content)
-        price_dom = soup.findAll('span', {'class': 'price pull-right'})
-
-        if not price_dom or len(price_dom) == 0:
-            return False
-
-        price_text = None
-        found = False
-        for price in price_dom:
-            if found:
-                break
-
-            try:
-                img_alt = price.parent.parent.parent.parent.parent.find('img').attrs[0][1]
-            except:
+        try:
+            url = 'https://csgo.steamanalyst.com/query.php?&q=%s' % market_hash_name
+            price = requests.get(url)
+            if not price.status_code == 200:
                 return False
 
-            if not found and market_hash_name == img_alt:
-                price_text = price.text
-                found = True
+            # Response should be like
 
-        if not found:
-            return False
+            # <div class="col-xs-12 col-sm-12 col-md-4 col-lg-3 col-xl-15 grid-item item-noscroll">
+            # <div class="card">
+            #         <div class="title"><a href="/model/AWP">AWP</a> | <a href="/name/Dragon Lore">Dragon Lore</a></div>
+            #         <div class="row" style="padding: 5px;">
+            #             <div class="special souvenir text-xs-right">
+            #                 <span class="tag tag-souvenir">Souvenir</span>
+            #             </div>
+            #             </div>
+            #             <div class="item-img">
+            #             <img alt="Souvenir AWP | Dragon Lore (Factory New)" src="https://steamcommunity-a.akamaihd.net/economy/image/fWFc82js0fmoRAP-qOIPu5THSWqfSmTELLqcUywGkijVjZYMUrsm1j-9xgEObwgfEh_nvjlWhNzZCveCDfIBj98xqodQ2CZknz56I_OKMyJYfwHGCKVIXfkF8BrtDig818Z0ROi6_rwOPWOz5cCRZq5_YtseF8HWUqODb1z07B1sg6IIecSApS3n3y3va2xbCka_-mgCzrWHpPI11dsTLfPm/"/>
+            #             </div>
+            #             <div class="card-block">
+            #             <ul class="list-group">
+            #                 <li class="fn list-group-item"><a href="/id/109736063"><span class="exterior">Factory New</span><span class="price pull-right">5,000 - 6,000 Keys</span></a></li>
+            #             </ul>
+            #         </div>
+            #     </div>
+            # </div>
 
-        new_lowest_price = None
-        new_median_price = None
-        sold_weekly = -1
+            soup = BeautifulSoup(price.content)
+            price_dom = soup.findAll('span', {'class': 'price pull-right'})
 
-        if price_text.startswith('$'):
-            try:
-                new_lowest_price = float(price_text.split(' ')[0][1:])
-                # print("Update %s by PRICE for %s" % (market_hash_name, new_lowest_price))
-            except:
+            if not price_dom or len(price_dom) == 0:
                 return False
-        else:
-            try:
-                new_lowest_price = float(int(price_text.split(' ')[0]) * KEY_PRICE)
-                # print("Update %s by KEYS for %s" % (market_hash_name, new_lowest_price))
-            except:
+
+            price_text = None
+            found = False
+            for price in price_dom:
+                if found:
+                    break
+
+                try:
+                    img_alt = price.parent.parent.parent.parent.parent.find('img').attrs[0][1]
+                except:
+                    return False
+
+                if not found and market_hash_name == img_alt:
+                    price_text = price.text
+                    found = True
+
+            if not found:
                 return False
 
-        new_median_price = new_lowest_price
+            new_lowest_price = None
+            new_median_price = None
+            sold_weekly = -1
 
-        if new_lowest_price and new_median_price:
-            return new_median_price
-            # return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
-            #                                   sold_weekly=sold_weekly).get("success", False)
+            if price_text.startswith('$'):
+                try:
+                    new_lowest_price = float(price_text.split(' ')[0][1:])
+                    # print("Update %s by PRICE for %s" % (market_hash_name, new_lowest_price))
+                except:
+                    return False
+            else:
+                try:
+                    new_lowest_price = float(int(price_text.split(' ')[0]) * KEY_PRICE)
+                    # print("Update %s by KEYS for %s" % (market_hash_name, new_lowest_price))
+                except:
+                    return False
+
+            new_median_price = new_lowest_price
+
+            if new_lowest_price and new_median_price:
+                return new_median_price
+                # return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+                #                                   sold_weekly=sold_weekly).get("success", False)
+        except:
+            pass
 
         return False
 
     def get_item_price(self, appid, market_hash_name):
-        time.sleep(10.0)
+        time.sleep(15.0)
 
         steam_analyst_price = self.get_item_price_steam_analyst(appid, market_hash_name)
 
