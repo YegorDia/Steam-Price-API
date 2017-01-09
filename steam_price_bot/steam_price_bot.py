@@ -234,51 +234,51 @@ class SteamPriceBot(object):
                 self.clean_queue_item(market_hash_name, appid)
                 return False
 
-            price_data = {}
+        price_data = {}
+        try:
+            price_data = json.loads(price.content.encode('utf-8'))
+        except ValueError:
+            return False
+
+        if price_data.get("success", False):
+            lowest_price = price_data.get('lowest_price', '&#36;-1')
+            median_price = price_data.get('median_price', lowest_price)
+            if lowest_price == '&#36;-1' and median_price != '&#36;-1':
+                lowest_price = median_price
             try:
-                price_data = json.loads(price.content.encode('utf-8'))
-            except ValueError:
-                return False
-
-            if price_data.get("success", False):
-                lowest_price = price_data.get('lowest_price', '&#36;-1')
-                median_price = price_data.get('median_price', lowest_price)
-                if lowest_price == '&#36;-1' and median_price != '&#36;-1':
-                    lowest_price = median_price
+                new_median_price = float(median_price.split('&#36;')[1])
+                new_lowest_price = float(lowest_price.split('&#36;')[1])
+            except:
                 try:
-                    new_median_price = float(median_price.split('&#36;')[1])
-                    new_lowest_price = float(lowest_price.split('&#36;')[1])
+                    new_median_price = float(median_price.split('$')[1])
+                    new_lowest_price = float(lowest_price.split('$')[1])
                 except:
-                    try:
-                        new_median_price = float(median_price.split('$')[1])
-                        new_lowest_price = float(lowest_price.split('$')[1])
-                    except:
-                        raise Exception('Convert error')
+                    raise Exception('Convert error')
 
-                sold_weekly = -1
+            sold_weekly = -1
 
-                if new_lowest_price > 1:
-                    graph_price = self.get_graph_price(market_hash_name, appid, new_lowest_price)
-                    new_lowest_price = graph_price["price"]
-                    new_median_price = new_lowest_price
-                    sold_weekly = graph_price["sold_weekly"]
+            if new_lowest_price > 1:
+                graph_price = self.get_graph_price(market_hash_name, appid, new_lowest_price)
+                new_lowest_price = graph_price["price"]
+                new_median_price = new_lowest_price
+                sold_weekly = graph_price["sold_weekly"]
 
-                if steam_analyst_price is not False:
-                    if steam_analyst_price < new_lowest_price:
-                        new_lowest_price = steam_analyst_price
-                        new_median_price = steam_analyst_price
-                        sold_weekly = -1
-
-                return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
-                                              sold_weekly=sold_weekly).get("success", False)
-            else:
-                if steam_analyst_price is not False:
+            if steam_analyst_price is not False:
+                if steam_analyst_price < new_lowest_price:
                     new_lowest_price = steam_analyst_price
                     new_median_price = steam_analyst_price
                     sold_weekly = -1
 
-                    return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
-                                                  sold_weekly=sold_weekly).get("success", False)
+            return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+                                          sold_weekly=sold_weekly).get("success", False)
+        else:
+            if steam_analyst_price is not False:
+                new_lowest_price = steam_analyst_price
+                new_median_price = steam_analyst_price
+                sold_weekly = -1
+
+                return self.update_item_price(market_hash_name, appid, new_lowest_price, new_median_price,
+                                              sold_weekly=sold_weekly).get("success", False)
         return False
 
     def get_available(self):
